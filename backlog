@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""
+Personal Backlog CLI - Personal backlog manager
+"""
+
+import json
+import os
+import sys
+import argparse
+from datetime import datetime
+from pathlib import Path
+
+class BacklogManager:
+    def __init__(self):
+        self.config_dir = Path.home() / '.personal-backlog'
+        self.config_file = self.config_dir / 'config.json'
+        self.backlogs_dir = self.config_dir / 'backlogs'
+        self.init_config()
+    
+    def init_config(self):
+        """Initialize configuration if it doesn't exist"""
+        self.config_dir.mkdir(exist_ok=True)
+        self.backlogs_dir.mkdir(exist_ok=True)
+        
+        if not self.config_file.exists():
+            config = {
+                'active_backlog': None,
+                'next_task_id': 1
+            }
+            self.save_config(config)
+    
+    def load_config(self):
+        """Load configuration"""
+        with open(self.config_file, 'r') as f:
+            return json.load(f)
+    
+    def save_config(self, config):
+        """Save configuration"""
+        with open(self.config_file, 'w') as f:
+            json.dump(config, f, indent=2)
+    
+    def create_backlog(self, name):
+        """Create a new backlog"""
+        backlog_file = self.backlogs_dir / f'{name}.json'
+        if backlog_file.exists():
+            print(f"❌ Backlog '{name}' already exists!")
+            return False
+        
+        backlog = {
+            'name': name,
+            'created': datetime.now().isoformat(),
+            'tasks': []
+        }
+        
+        with open(backlog_file, 'w') as f:
+            json.dump(backlog, f, indent=2)
+        
+        print(f"✅ Backlog '{name}' created successfully!")
+        return True
+    
+    def set_active_backlog(self, name):
+        """Set active backlog"""
+        backlog_file = self.backlogs_dir / f'{name}.json'
+        if not backlog_file.exists():
+            print(f"❌ Backlog '{name}' doesn't exist!")
+            return False
+        
+        config = self.load_config()
+        config['active_backlog'] = name
+        self.save_config(config)
+        
+        print(f"✅ Backlog '{name}' set as active!")
+        return True
+    
+    def add_task(self, description, backlog_name=None):
+        """Add a task to the backlog"""
+        config = self.load_config()
+        
+        if backlog_name is None:
+            backlog_name = config.get('active_backlog')
+            if not backlog_name:
+                print("❌ No active backlog! Use -a to set one or specify the backlog.")
+                return False
+        
+        backlog_file = self.backlogs_dir / f'{backlog_name}.json'
+        if not backlog_file.exists():
+            print(f"❌ Backlog '{backlog_name}' doesn't exist!")
+            return False
+        
+        with open(backlog_file, 'r') as f:
+            backlog = json.load(f)
+        
+        task = {
+            'id': config['next_task_id'],
+            'description': description,
+            'created': datetime.now().isoformat(),
+            'status': 'pending'
+        }
+        
+        backlog['tasks'].append(task)
+        
+        with open(backlog_file, 'w') as f:
+            json.dump(backlog, f, indent=2)
+        
+        config['next_task_id'] += 1
+        self.save_config(config)
+        
+        print(f"✅ Task #{task['id']} added to backlog '{backlog_name}': {description}")
+        return True
+    
+    def list_backlogs(self):
+        """List all backlogs"""
+        config = self.load_config()
+        active_backlog = config.get('active_backlog')
+        
+        backlog_files = list(self.backlogs_dir.glob('*.json'))
+        if not backlog_files:
+            print("📝 No backlogs found!")
+            return
+        
+        print("📋 Available backlogs:")
+        for backlog_file in backlog_files:
+            name = backlog_file.stem
+            marker = " (active)" if name == active_backlog else ""
+            
+            with open(backlog_file, 'r') as f:
+                backlog = json.load(f)
+            
+            task_count = len(backlog['tasks'])
+            print(f"  • {name}{marker} - {task_count} task(s)")
+    
+    def list_tasks(self, backlog_name=None):
+        """List tasks from a backlog"""
+        config = self.load_config()
+        
+        if backlog_name is None:
+            backlog_name = config.get('active_backlog')
+            if not backlog_name:
+                print("❌ No active backlog! Use -a to set one or specify the backlog.")
+                return False
+        
+        backlog_file = self.backlogs_dir / f'{backlog_name}.json'
+        if not backlog_file.exists():
+            print(f"❌ Backlog '{backlog_name}' doesn't exist!")
+            return False
+        
+        with open(backlog_file, 'r') as f:
+            backlog = json.load(f)
+        
+        if not backlog['tasks']:
+            print(f"📝 Backlog '{backlog_name}' is empty!")
+            return True
+        
+        print(f"📋 Tasks from backlog '{backlog_name}':")
+        for task in backlog['tasks']:
+            status_icon = "✅" if task['status'] == 'done' else "⏳"
+            print(f"  {status_icon} #{task['id']}: {task['description']}")
+        
+        return True
+    
+    def move_task(self, task_id, target_backlog):
+        """Move a task from one backlog to another"""
+        source_backlog = None
+        source_file = None
+        task_to_move = None
+        
+        # Find the task in the source backlog
+        for backlog_file in self.backlogs_dir.glob('*.json'):
+            with open(backlog_file, 'r') as f:
+                backlog = json.load(f)
+            
+            for task in backlog['tasks']:
+                if task['id'] == task_id:
+                    source_backlog = backlog
+                    source_file = backlog_file
+                    task_to_move = task
+                    break
+            
+            if task_to_move:
+                break
+        
+        if not task_to_move:
+            print(f"❌ Task #{task_id} not found!")
+            return False
+        
+        # Check if target backlog exists
+        target_file = self.backlogs_dir / f'{target_backlog}.json'
+        if not target_file.exists():
+            print(f"❌ Target backlog '{target_backlog}' doesn't exist!")
+            return False
+        
+        # Remove from source
+        source_backlog['tasks'] = [t for t in source_backlog['tasks'] if t['id'] != task_id]
+        with open(source_file, 'w') as f:
+            json.dump(source_backlog, f, indent=2)
+        
+        # Add to target
+        with open(target_file, 'r') as f:
+            target_backlog_data = json.load(f)
+        
+        target_backlog_data['tasks'].append(task_to_move)
+        with open(target_file, 'w') as f:
+            json.dump(target_backlog_data, f, indent=2)
+        
+        source_name = source_file.stem
+        print(f"✅ Task #{task_id} moved from '{source_name}' to '{target_backlog}'!")
+        return True
+    
+    def complete_task(self, task_id):
+        """Mark a task as completed"""
+        for backlog_file in self.backlogs_dir.glob('*.json'):
+            with open(backlog_file, 'r') as f:
+                backlog = json.load(f)
+            
+            for task in backlog['tasks']:
+                if task['id'] == task_id:
+                    task['status'] = 'done'
+                    task['completed'] = datetime.now().isoformat()
+                    
+                    with open(backlog_file, 'w') as f:
+                        json.dump(backlog, f, indent=2)
+                    
+                    print(f"✅ Task #{task_id} marked as completed!")
+                    return True
+        
+        print(f"❌ Task #{task_id} não encontrada!")
+        return False
+
+
+def print_help():
+    """Show command help"""
+    help_text = """
+🎯 Personal Backlog CLI - Personal backlog manager
+
+USAGE:
+  backlog [command] [options]
+
+COMMANDS:
+  backlog -n <name>           Create a new backlog
+  backlog -a <name>           Set backlog as active
+  backlog <description>       Add task to active backlog
+  backlog -l                  List all backlogs
+  backlog -t [backlog]        List tasks (active or specified backlog)
+  backlog -m <id> <target>    Move task to another backlog
+  backlog -c <id>             Mark task as completed
+  backlog -h, --help          Show this help
+
+EXAMPLES:
+  backlog -n work                        # Create 'work' backlog
+  backlog -a work                        # Set 'work' as active
+  backlog "Implement feature X"          # Add task to active backlog
+  backlog -m 5 personal                  # Move task #5 to 'personal' backlog
+  backlog -c 3                           # Mark task #3 as completed
+
+ALIAS:
+  bl (same as backlog)
+
+💡 TIPS:
+  • Use quotes for descriptions with spaces
+  • Tasks have unique IDs for easy movement
+  • Active backlog is used by default when not specified
+"""
+    print(help_text)
+
+
+def main():
+    manager = BacklogManager()
+    
+    if len(sys.argv) == 1:
+        print_help()
+        return
+    
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('-n', '--new', help='Create new backlog')
+    parser.add_argument('-a', '--active', help='Set active backlog')
+    parser.add_argument('-l', '--list', action='store_true', help='List backlogs')
+    parser.add_argument('-t', '--tasks', nargs='?', const=True, help='List tasks')
+    parser.add_argument('-m', '--move', nargs=2, metavar=('ID', 'BACKLOG'), help='Move task')
+    parser.add_argument('-c', '--complete', type=int, help='Complete task')
+    parser.add_argument('-h', '--help', action='store_true', help='Show help')
+    parser.add_argument('description', nargs='*', help='Task description')
+    
+    args = parser.parse_args()
+    
+    if args.help:
+        print_help()
+    elif args.new:
+        manager.create_backlog(args.new)
+    elif args.active:
+        manager.set_active_backlog(args.active)
+    elif args.list:
+        manager.list_backlogs()
+    elif args.tasks is not None:
+        if args.tasks is True:
+            manager.list_tasks()
+        else:
+            manager.list_tasks(args.tasks)
+    elif args.move:
+        task_id, target_backlog = args.move
+        manager.move_task(int(task_id), target_backlog)
+    elif args.complete:
+        manager.complete_task(args.complete)
+    elif args.description:
+        description = ' '.join(args.description)
+        manager.add_task(description)
+    else:
+        print_help()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""
+Alias 'bl' para o Personal Backlog CLI
+"""
+
+import os
+import sys
+from pathlib import Path
+
+# Executa o script principal
+script_dir = Path(__file__).parent
+main_script = script_dir / 'backlog'
+
+os.execv(sys.executable, [sys.executable, str(main_script)] + sys.argv[1:])
