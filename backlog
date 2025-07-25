@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import argparse
+import csv
 from datetime import datetime
 from pathlib import Path
 
@@ -238,8 +239,59 @@ class BacklogManager:
                     print(f"✅ Task #{task_id} marked as completed!")
                     return True
         
-        print(f"❌ Task #{task_id} não encontrada!")
+        print(f"❌ Task #{task_id} not found!")
         return False
+    
+    def export_to_csv(self, backlog_name=None, output_file=None):
+        """Export tasks to CSV format"""
+        config = self.load_config()
+        
+        if backlog_name is None:
+            backlog_name = config.get('active_backlog')
+            if not backlog_name:
+                print("❌ No active backlog! Use -a to set one or specify the backlog.")
+                return False
+        
+        backlog_file = self.backlogs_dir / f'{backlog_name}.json'
+        if not backlog_file.exists():
+            print(f"❌ Backlog '{backlog_name}' doesn't exist!")
+            return False
+        
+        with open(backlog_file, 'r') as f:
+            backlog = json.load(f)
+        
+        if not backlog['tasks']:
+            print(f"📝 Backlog '{backlog_name}' is empty - nothing to export!")
+            return True
+        
+        # Generate filename if not provided
+        if output_file is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_file = f'{backlog_name}_tasks_{timestamp}.csv'
+        
+        try:
+            with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['id', 'description', 'status', 'created', 'completed']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                
+                writer.writeheader()
+                for task in backlog['tasks']:
+                    row = {
+                        'id': task['id'],
+                        'description': task['description'],
+                        'status': task['status'],
+                        'created': task['created'],
+                        'completed': task.get('completed', '')
+                    }
+                    writer.writerow(row)
+            
+            task_count = len(backlog['tasks'])
+            print(f"✅ Exported {task_count} task(s) from backlog '{backlog_name}' to '{output_file}'")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error exporting to CSV: {str(e)}")
+            return False
 
 
 def print_help():
@@ -259,6 +311,7 @@ COMMANDS:
   backlog -s <status>         Filter tasks by status (pending, done, completed)
   backlog -m <id> <target>    Move task to another backlog
   backlog -c <id>             Mark task as completed
+  backlog -e [file]           Export tasks to CSV (auto-generated filename if not specified)
   backlog -h, --help          Show this help
 
 EXAMPLES:
@@ -270,6 +323,8 @@ EXAMPLES:
   backlog -s completed                   # List only completed tasks from active backlog
   backlog -m 5 personal                  # Move task #5 to 'personal' backlog
   backlog -c 3                           # Mark task #3 as completed
+  backlog -e                             # Export active backlog tasks to CSV (auto-named file)
+  backlog -e work_tasks.csv              # Export active backlog tasks to specific CSV file
 
 ALIAS:
   bl (same as backlog)
@@ -299,6 +354,7 @@ def main():
     parser.add_argument('-s', '--status', choices=['pending', 'done', 'completed'], help='Filter tasks by status (pending, done, completed)')
     parser.add_argument('-m', '--move', nargs=2, metavar=('ID', 'BACKLOG'), help='Move task')
     parser.add_argument('-c', '--complete', type=int, help='Complete task')
+    parser.add_argument('-e', '--export', nargs='?', const=True, metavar='FILE', help='Export tasks to CSV')
     parser.add_argument('-h', '--help', action='store_true', help='Show help')
     parser.add_argument('description', nargs='*', help='Task description')
     
@@ -322,6 +378,11 @@ def main():
         manager.move_task(int(task_id), target_backlog)
     elif args.complete:
         manager.complete_task(args.complete)
+    elif args.export is not None:
+        if args.export is True:
+            manager.export_to_csv()
+        else:
+            manager.export_to_csv(output_file=args.export)
     elif args.status and not args.tasks:
         # If only --status is provided, show tasks from active backlog with that status
         manager.list_tasks(status_filter=args.status)

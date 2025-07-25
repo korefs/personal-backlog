@@ -15,10 +15,18 @@ A simple and efficient personal backlog manager for the command line. Organize y
 
 ## 🚀 Installation
 
-### Global Installation (Recommended)
+### Quick Installation (Recommended)
+
+```bash
+# Download and install directly from GitHub
+curl -fsSL https://raw.githubusercontent.com/korefs/personal-backlog/main/install.sh | sudo bash
+```
+
+### Manual Installation
 
 ```bash
 # Clone or download the files
+git clone https://github.com/korefs/personal-backlog.git
 cd personal-backlog
 
 # Run the installer
