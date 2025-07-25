@@ -15,6 +15,10 @@ A simple and efficient personal backlog manager for the command line. Organize y
 
 ## 🚀 Installation
 
+### Requirements
+
+- **Python 3** (3.6 or higher)
+
 ### Quick Installation (Recommended)
 
 ```bash
