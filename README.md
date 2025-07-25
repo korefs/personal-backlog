@@ -9,6 +9,7 @@ A simple and efficient personal backlog manager for the command line. Organize y
 - 🔢 **Unique IDs**: Each task has a unique ID for easy reference
 - 🔄 **Task movement**: Move tasks between backlogs without complications
 - ✅ **Completion status**: Mark tasks as completed
+- 🔍 **Status filtering**: Filter tasks by status (pending, done, completed)
 - 🚀 **Short alias**: Use `bl` as shortcut for `backlog`
 - 💾 **Local persistence**: Data saved in `~/.personal-backlog/`
 
@@ -60,6 +61,11 @@ backlog -t
 
 # List tasks from a specific backlog
 backlog -t personal
+
+# Filter tasks by status
+backlog -s pending              # Show only pending tasks from active backlog
+backlog -s done                 # Show only completed tasks from active backlog
+backlog -t work -s completed    # Show only completed tasks from 'work' backlog
 ```
 
 ### Task Management
@@ -211,6 +217,7 @@ Data is saved in `~/.personal-backlog/`:
 | `backlog <description>` | Add task to active backlog | `backlog "New feature"` |
 | `backlog -l` | List all backlogs | `backlog -l` |
 | `backlog -t [backlog]` | List tasks | `backlog -t` or `backlog -t personal` |
+| `backlog -s <status>` | Filter tasks by status | `backlog -s pending` |
 | `backlog -m <id> <target>` | Move task to another backlog | `backlog -m 5 personal` |
 | `backlog -c <id>` | Mark task as completed | `backlog -c 3` |
 | `backlog -h, --help` | Show help | `backlog --help` |
@@ -221,6 +228,8 @@ Data is saved in `~/.personal-backlog/`:
 - Use quotes for descriptions with spaces: `backlog "Task with multiple words"`
 - Keep an active backlog to add tasks quickly
 - Use IDs to reference tasks in discussions: "I'll work on task #5"
+- Filter tasks by status to focus on specific work: `backlog -s pending`
+- Combine backlog and status filters: `backlog -t work -s done`
 
 ### Organization
 - Create backlogs by project, context or life area
@@ -238,8 +247,15 @@ tar -czf backlog-backup-$(date +%Y%m%d).tar.gz ~/.personal-backlog/
 # List pending tasks from all backlogs
 for backlog in ~/.personal-backlog/backlogs/*.json; do
   echo "=== $(basename "$backlog" .json) ==="
-  backlog -t "$(basename "$backlog" .json)" | grep "⏳"
+  backlog -t "$(basename "$backlog" .json)" -s pending
 done
+
+# Show daily standup - what's done and what's pending
+echo "✅ COMPLETED:"
+backlog -s done
+echo ""
+echo "⏳ TODO:"
+backlog -s pending
 ```
 
 ## 🔍 Troubleshooting
@@ -277,7 +293,7 @@ rm -rf ~/.personal-backlog/
 
 ## 📋 Roadmap
 
-- [ ] Filters by status (pending, completed)
+- [x] Filters by status (pending, completed)
 - [ ] Task priorities
 - [ ] Dates and deadlines
 - [ ] Export to CSV/JSON

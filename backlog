@@ -129,8 +129,8 @@ class BacklogManager:
             task_count = len(backlog['tasks'])
             print(f"  • {name}{marker} - {task_count} task(s)")
     
-    def list_tasks(self, backlog_name=None):
-        """List tasks from a backlog"""
+    def list_tasks(self, backlog_name=None, status_filter=None):
+        """List tasks from a backlog with optional status filtering"""
         config = self.load_config()
         
         if backlog_name is None:
@@ -147,12 +147,27 @@ class BacklogManager:
         with open(backlog_file, 'r') as f:
             backlog = json.load(f)
         
-        if not backlog['tasks']:
-            print(f"📝 Backlog '{backlog_name}' is empty!")
+        # Filter tasks by status if specified
+        tasks = backlog['tasks']
+        if status_filter:
+            if status_filter == 'pending':
+                tasks = [task for task in tasks if task['status'] == 'pending']
+            elif status_filter == 'done' or status_filter == 'completed':
+                tasks = [task for task in tasks if task['status'] == 'done']
+            else:
+                print(f"❌ Invalid status filter '{status_filter}'. Use 'pending', 'done', or 'completed'.")
+                return False
+        
+        if not tasks:
+            if status_filter:
+                print(f"📝 No {status_filter} tasks found in backlog '{backlog_name}'!")
+            else:
+                print(f"📝 Backlog '{backlog_name}' is empty!")
             return True
         
-        print(f"📋 Tasks from backlog '{backlog_name}':")
-        for task in backlog['tasks']:
+        status_text = f" ({status_filter} only)" if status_filter else ""
+        print(f"📋 Tasks from backlog '{backlog_name}'{status_text}:")
+        for task in tasks:
             status_icon = "✅" if task['status'] == 'done' else "⏳"
             print(f"  {status_icon} #{task['id']}: {task['description']}")
         
@@ -241,6 +256,7 @@ COMMANDS:
   backlog <description>       Add task to active backlog
   backlog -l                  List all backlogs
   backlog -t [backlog]        List tasks (active or specified backlog)
+  backlog -s <status>         Filter tasks by status (pending, done, completed)
   backlog -m <id> <target>    Move task to another backlog
   backlog -c <id>             Mark task as completed
   backlog -h, --help          Show this help
@@ -249,6 +265,9 @@ EXAMPLES:
   backlog -n work                        # Create 'work' backlog
   backlog -a work                        # Set 'work' as active
   backlog "Implement feature X"          # Add task to active backlog
+  backlog -t -s pending                  # List only pending tasks from active backlog
+  backlog -t work -s done                # List only completed tasks from 'work' backlog
+  backlog -s completed                   # List only completed tasks from active backlog
   backlog -m 5 personal                  # Move task #5 to 'personal' backlog
   backlog -c 3                           # Mark task #3 as completed
 
@@ -259,6 +278,8 @@ ALIAS:
   • Use quotes for descriptions with spaces
   • Tasks have unique IDs for easy movement
   • Active backlog is used by default when not specified
+  • Use -s to filter tasks by status: pending, done, or completed
+  • Combine -t and -s to filter tasks from specific backlogs
 """
     print(help_text)
 
@@ -275,6 +296,7 @@ def main():
     parser.add_argument('-a', '--active', help='Set active backlog')
     parser.add_argument('-l', '--list', action='store_true', help='List backlogs')
     parser.add_argument('-t', '--tasks', nargs='?', const=True, help='List tasks')
+    parser.add_argument('-s', '--status', choices=['pending', 'done', 'completed'], help='Filter tasks by status (pending, done, completed)')
     parser.add_argument('-m', '--move', nargs=2, metavar=('ID', 'BACKLOG'), help='Move task')
     parser.add_argument('-c', '--complete', type=int, help='Complete task')
     parser.add_argument('-h', '--help', action='store_true', help='Show help')
@@ -292,14 +314,17 @@ def main():
         manager.list_backlogs()
     elif args.tasks is not None:
         if args.tasks is True:
-            manager.list_tasks()
+            manager.list_tasks(status_filter=args.status)
         else:
-            manager.list_tasks(args.tasks)
+            manager.list_tasks(args.tasks, status_filter=args.status)
     elif args.move:
         task_id, target_backlog = args.move
         manager.move_task(int(task_id), target_backlog)
     elif args.complete:
         manager.complete_task(args.complete)
+    elif args.status and not args.tasks:
+        # If only --status is provided, show tasks from active backlog with that status
+        manager.list_tasks(status_filter=args.status)
     elif args.description:
         description = ' '.join(args.description)
         manager.add_task(description)
